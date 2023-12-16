@@ -25,9 +25,49 @@
         ((null? x) null-val)
         (else (error "no immediate representation for" x))))
 
-(define (compile-program x)
-    (cond
-        ((immediate? x)
-         (emit "movl $~a, %eax" (immediate-rep x)))
-        (else (error "syntax error")))
+; infra for primitives 
+(define-syntax define-primitive
+    (syntax-rules ()
+        ((_ (prim-name arg* ...) b b* ...)
+            (begin
+                (set-symbol-property! 'prim-name '*is-prim* #t)
+                (set-symbol-property! 'prim-name '*arg-count* 
+                    (length '(arg* ...)))
+                (set-symbol-property! 'prim-name '*emitter*
+                    (lambda (arg* ...) b b* ...))))))
+
+(define (primitive? x)
+    ; is x a primitve
+    (and (symbol? x) (symbol-property x '*is-prim*)))
+
+(define (primitive-emitter x)
+    ; get primitve emitter of x
+    (or (symbol-property x '*emitter*) (error "not primitive"))) 
+
+(define (primcall? expr)
+    ; is expr a primitive call
+    (and (pair? expr) (primitive? (car expr))))
+
+; cases for compiler
+(define (compile-program x)    
+    (emit-expr x)
     (emit "ret"))
+
+(define (emit-expr expr)
+    (cond
+        ((immediate? expr) (emit-immediate expr))
+        ((primcall? expr) (emit-primcall expr))
+        (else (error "syntax error"))))
+
+(define (emit-primcall expr)
+    (let ((prim (car expr))
+          (args (cdr expr)))
+        (apply (primitive-emitter prim) args)))
+
+(define (emit-immediate expr)
+    (emit "movl $~a, %eax" (immediate-rep expr)))
+
+; add primitives
+(define-primitive (add1 arg)
+    (emit-expr arg)
+    (emit "addl $~a, %eax" (immediate-rep 1)))

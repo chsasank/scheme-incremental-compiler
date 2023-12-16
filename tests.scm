@@ -43,3 +43,13 @@
 
 ; empty list
 (run-test '() "()\n")
+
+; add1
+(run-test '(add1 0) "1\n")
+(run-test '(add1 -1) "0\n")
+(run-test '(add1 1) "2\n")
+(run-test '(add1 -100) "-99\n")
+(run-test '(add1 536870910) "536870911\n")
+(run-test '(add1 -536870912) "-536870911\n")
+(run-test '(add1 (add1 0)) "2\n")
+(run-test '(add1 (add1 (add1 (add1 (add1 (add1 12)))))) "18\n")

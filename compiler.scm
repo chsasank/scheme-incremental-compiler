@@ -71,3 +71,16 @@
 (define-primitive (add1 arg)
     (emit-expr arg)
     (emit "addl $~a, %eax" (immediate-rep 1)))
+
+(define-primitive (sub1 arg)
+    (emit-expr arg)
+    (emit "subl $~a, %eax" (immediate-rep 1)))
+
+(define-primitive (integer->char arg)
+    (emit-expr arg)
+    (emit "shll $~a, %eax" (- char-shift fixnum-shift))
+    (emit "orl $~a, %eax" char-tag))
+
+(define-primitive (char->integer arg)
+    (emit-expr arg)
+    (emit "shrl $~a, %eax" (- char-shift fixnum-shift)))

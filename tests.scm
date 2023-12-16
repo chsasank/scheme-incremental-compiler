@@ -18,3 +18,28 @@
 (run-test 536870911 "536870911\n")
 (run-test -536870912 "-536870912\n")
 
+; characters
+(run-test #\! "#\\!\n")
+(run-test #\" "#\\\"\n")
+(run-test #\# "#\\#\n")
+(run-test #\' "#\\'\n")
+
+(run-test #\0 "#\\0\n")
+(run-test #\1 "#\\1\n")
+(run-test #\; "#\\;\n")
+
+(run-test #\A "#\\A\n")
+(run-test #\B "#\\B\n")
+(run-test #\Y "#\\Y\n")
+(run-test #\Z "#\\Z\n")
+(run-test #\a "#\\a\n")
+(run-test #\b "#\\b\n")
+(run-test #\y "#\\y\n")
+(run-test #\z "#\\z\n")
+
+; booleans
+(run-test #t "#t\n")
+(run-test #f "#f\n")
+
+; empty list
+(run-test '() "()\n")

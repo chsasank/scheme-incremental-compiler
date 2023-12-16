@@ -5,25 +5,29 @@
 (define bool-tag #b0011111)
 (define null-val #b00101111)
 
+(define (immediate? x)
+    ;check if x is one of immediate type
+    (or (integer? x) (char? x) (boolean? x) (null? x)))
+
+(define (immediate-rep x)
+    ;Convert x into tagged pointer representation
+    (cond
+        ; bit shift integers by 2 bits
+        ((integer? x) (ash x fixnum-shift))
+        ; bit shift by 8 integers and add tag
+        ; for character
+        ((char? x)
+            (logior char-tag (ash (char->integer x) char-shift)))
+        ; same for boolean
+        ((boolean? x) 
+            (logior bool-tag (ash (if x 1 0) bool-shift)))
+        ; empty list
+        ((null? x) null-val)
+        (else (error "no immediate representation for" x))))
 
 (define (compile-program x)
-    (define (immediate-rep x)
-        ;Convert x into tagged pointer representation
-        (cond
-            ; bit shift integers by 2 bits
-            ((integer? x) (ash x fixnum-shift))
-            ; bit shift by 8 integers and add tag
-            ; for character
-            ((char? x)
-                (logior char-tag (ash (char->integer x) char-shift)))
-            ; same for boolean
-            ((boolean? x) 
-                (logior bool-tag (ash (if x 1 0) bool-shift)))
-            ; empty list
-            ((null? x) null-val)
-            (else (error "no immediate representation for" x))
-
-        ))
-
-    (emit "movl $~a, %eax" (immediate-rep x))
+    (cond
+        ((immediate? x)
+         (emit "movl $~a, %eax" (immediate-rep x)))
+        (else (error "syntax error")))
     (emit "ret"))

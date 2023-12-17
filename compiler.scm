@@ -4,6 +4,7 @@
 (define bool-shift 7)
 (define bool-tag #b0011111)
 (define null-val #b00101111)
+(define word-size 8)
 
 (define (immediate? x)
     ;check if x is one of immediate type
@@ -28,13 +29,13 @@
 ; infra for primitives 
 (define-syntax define-primitive
     (syntax-rules ()
-        ((_ (prim-name arg* ...) b b* ...)
+        ((_ (prim-name si arg* ...) b b* ...)
             (begin
                 (set-symbol-property! 'prim-name '*is-prim* #t)
                 (set-symbol-property! 'prim-name '*arg-count* 
                     (length '(arg* ...)))
                 (set-symbol-property! 'prim-name '*emitter*
-                    (lambda (arg* ...) b b* ...))))))
+                    (lambda (si arg* ...) b b* ...))))))
 
 (define (primitive? x)
     ; is x a primitve
@@ -50,39 +51,39 @@
 
 ; cases for compiler
 (define (compile-program x)    
-    (emit-expr x)
+    (emit-expr (- word-size) x)
     (emit "ret"))
 
-(define (emit-expr expr)
+(define (emit-expr si expr)
     (cond
         ((immediate? expr) (emit-immediate expr))
-        ((primcall? expr) (emit-primcall expr))
+        ((primcall? expr) (emit-primcall si expr))
         (else (error "syntax error"))))
 
-(define (emit-primcall expr)
+(define (emit-primcall si expr)
     (let ((prim (car expr))
           (args (cdr expr)))
-        (apply (primitive-emitter prim) args)))
+        (apply (primitive-emitter prim) si args)))
 
 (define (emit-immediate expr)
     (emit "movl $~a, %eax" (immediate-rep expr)))
 
 ; add primitives
-(define-primitive (add1 arg)
-    (emit-expr arg)
+(define-primitive (add1 si arg)
+    (emit-expr si arg)
     (emit "addl $~a, %eax" (immediate-rep 1)))
 
-(define-primitive (sub1 arg)
-    (emit-expr arg)
+(define-primitive (sub1 si arg)
+    (emit-expr si arg)
     (emit "subl $~a, %eax" (immediate-rep 1)))
 
-(define-primitive (integer->char arg)
-    (emit-expr arg)
+(define-primitive (integer->char si arg)
+    (emit-expr si arg)
     (emit "shll $~a, %eax" (- char-shift fixnum-shift))
     (emit "orl $~a, %eax" char-tag))
 
-(define-primitive (char->integer arg)
-    (emit-expr arg)
+(define-primitive (char->integer si arg)
+    (emit-expr si arg)
     (emit "shrl $~a, %eax" (- char-shift fixnum-shift)))
 
 (define (zeroflag-to-bool)
@@ -96,43 +97,52 @@
     (emit "sall $~a, %eax" bool-shift)
     (emit "orl $~a, %eax" bool-tag))
 
-(define-primitive (zero? arg)
-    (emit-expr arg)
+(define-primitive (zero? si arg)
+    (emit-expr si arg)
     ; compare 0 to result and set zero flag if true
     (emit "cmpl $0, %eax")
     (zeroflag-to-bool))
 
-(define-primitive (null? arg)
-    (emit-expr arg)
+(define-primitive (null? si arg)
+    (emit-expr si arg)
     ; compare null value bits to result and set zero flag if true
     (emit "cmpl $~a, %eax" null-val)
     (zeroflag-to-bool))
 
-(define-primitive (not arg)
+(define-primitive (not si arg)
     ; return true only if arg is #f
-    (emit-expr arg)
+    (emit-expr si arg)
     ; compare immediate rep of #f to result
     ; set zero flag if true
     (emit "cmpl $~a, %eax" (immediate-rep #f))
     (zeroflag-to-bool))
 
-(define-primitive (integer? arg)
-    (emit-expr arg)
+(define-primitive (integer? si arg)
+    (emit-expr si arg)
     ; apply fixnum mask (1 bits fixnum-shift times)
     (emit "and $~s, %al" (- (ash 1 fixnum-shift) 1))
     (emit "cmp $~s, %al" #b00)
     (zeroflag-to-bool))
 
-(define-primitive (char? arg)
-    (emit-expr arg)
+(define-primitive (char? si arg)
+    (emit-expr si arg)
     ; apply fixnum mask (1 bits char-shift times)
     (emit "and $~s, %al" (- (ash 1 char-shift) 1))
     (emit "cmp $~s, %al" char-tag)
     (zeroflag-to-bool))
 
-(define-primitive (boolean? arg)
-    (emit-expr arg)
+(define-primitive (boolean? si arg)
+    (emit-expr si arg)
     ; apply fixnum mask (1 bits bool-shift times)
     (emit "and $~s, %al" (- (ash 1 bool-shift) 1))
     (emit "cmp $~s, %al" bool-tag)
     (zeroflag-to-bool))
+
+; binary primitives
+
+(define-primitive (+ si arg1 arg2)
+    (emit-expr si arg1)
+    (emit "movl %eax, ~a(%rsp)" si)
+    (emit-expr (- si word-size) arg2)
+    (emit "addl ~a(%rsp), %eax" si)
+)

@@ -16,7 +16,13 @@
         ".p2align 4\n"
         ".globl	scheme_entry\n"        
         ".type	scheme_entry, @function\n"
-        "scheme_entry:\n")
+        "scheme_entry:\n"
+        "mov %rsp, %rcx\n"
+        "mov %rdi, %rsp\n"
+        "call L_scheme_entry\n"
+        "mov %rcx, %rsp\n"
+        "ret\n"
+        "L_scheme_entry:\n")
         output-file)
 
     (compile-program x)

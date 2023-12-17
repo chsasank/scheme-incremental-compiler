@@ -50,7 +50,9 @@
     (and (pair? expr) (primitive? (car expr))))
 
 ; cases for compiler
-(define (compile-program x)    
+(define (compile-program x)
+    ; initialize stack index - word-size so as not to 
+    ; overwrite return address
     (emit-expr (- word-size) x)
     (emit "ret"))
 
@@ -139,10 +141,83 @@
     (zeroflag-to-bool))
 
 ; binary primitives
-
 (define-primitive (+ si arg1 arg2)
+    (emit-expr si arg1)
+    
+    ; save result of arg1 in stack
+    (emit "movl %eax, ~a(%rsp)" si)
+
+    ; move stack index by a word so that 
+    ; above is not overwritten
+    (emit-expr (- si word-size) arg2)
+
+    ; add result from stack with arg2 result
+    ; this works because of integer tag = b00
+    (emit "addl ~a(%rsp), %eax" si))
+
+(define-primitive (- si arg1 arg2)
+    (emit-expr si arg2)
+    (emit "movl %eax, ~a(%rsp)" si)
+    (emit-expr (- si word-size) arg1)
+    (emit "subl ~a(%rsp), %eax" si))
+
+(define-primitive (* si arg1 arg2)
     (emit-expr si arg1)
     (emit "movl %eax, ~a(%rsp)" si)
     (emit-expr (- si word-size) arg2)
-    (emit "addl ~a(%rsp), %eax" si)
-)
+    ; remove b00 from int for one of the args
+    (emit "shrl $~a, %eax" fixnum-shift)
+    (emit "imull ~a(%rsp), %eax" si))
+
+(define-primitive (= si arg1 arg2)
+    (emit-expr si arg1)
+    (emit "movl %eax, ~a(%rsp)" si)
+    (emit-expr (- si word-size) arg2)
+    (emit "cmpl ~a(%rsp), %eax" si)
+    (zeroflag-to-bool))
+
+(define-primitive (< si arg1 arg2)
+    (emit-expr si arg1)
+    (emit "movl %eax, ~a(%rsp)" si)
+    (emit-expr (- si word-size) arg2)
+    (emit "cmpl %eax, ~a(%rsp)" si)
+    
+    (emit "movl $0, %eax")
+    ; set lower byte of eax register to 0/1 if cmpl is less than
+    (emit "setl %al")
+    ; convert 0/1 in eax to bool
+    (emit "sall $~a, %eax" bool-shift)
+    (emit "orl $~a, %eax" bool-tag))
+
+(define-primitive (<= si arg1 arg2)
+    (emit-expr si arg1)
+    (emit "movl %eax, ~a(%rsp)" si)
+    (emit-expr (- si word-size) arg2)
+    (emit "cmpl %eax, ~a(%rsp)" si)
+    
+    (emit "movl $0, %eax")
+    (emit "setle %al")
+    (emit "sall $~a, %eax" bool-shift)
+    (emit "orl $~a, %eax" bool-tag))
+
+(define-primitive (> si arg1 arg2)
+    (emit-expr si arg1)
+    (emit "movl %eax, ~a(%rsp)" si)
+    (emit-expr (- si word-size) arg2)
+    (emit "cmpl %eax, ~a(%rsp)" si)
+    
+    (emit "movl $0, %eax")
+    (emit "setg %al")
+    (emit "sall $~a, %eax" bool-shift)
+    (emit "orl $~a, %eax" bool-tag))
+
+(define-primitive (>= si arg1 arg2)
+    (emit-expr si arg1)
+    (emit "movl %eax, ~a(%rsp)" si)
+    (emit-expr (- si word-size) arg2)
+    (emit "cmpl %eax, ~a(%rsp)" si)
+    
+    (emit "movl $0, %eax")
+    (emit "setge %al")
+    (emit "sall $~a, %eax" bool-shift)
+    (emit "orl $~a, %eax" bool-tag))

@@ -84,3 +84,55 @@
 (define-primitive (char->integer arg)
     (emit-expr arg)
     (emit "shrl $~a, %eax" (- char-shift fixnum-shift)))
+
+(define (zeroflag-to-bool)
+    ; convert zeroflag set by cmp to boolean
+    ; used in other primitives
+    ; make eax 0
+    (emit "movl $0, %eax")
+    ; set lower byte of eax register to 0/1 based on zeroflag
+    (emit "sete %al")
+    ; convert 0/1 in eax to bool
+    (emit "sall $~a, %eax" bool-shift)
+    (emit "orl $~a, %eax" bool-tag))
+
+(define-primitive (zero? arg)
+    (emit-expr arg)
+    ; compare 0 to result and set zero flag if true
+    (emit "cmpl $0, %eax")
+    (zeroflag-to-bool))
+
+(define-primitive (null? arg)
+    (emit-expr arg)
+    ; compare null value bits to result and set zero flag if true
+    (emit "cmpl $~a, %eax" null-val)
+    (zeroflag-to-bool))
+
+(define-primitive (not arg)
+    ; return true only if arg is #f
+    (emit-expr arg)
+    ; compare immediate rep of #f to result
+    ; set zero flag if true
+    (emit "cmpl $~a, %eax" (immediate-rep #f))
+    (zeroflag-to-bool))
+
+(define-primitive (integer? arg)
+    (emit-expr arg)
+    ; apply fixnum mask (1 bits fixnum-shift times)
+    (emit "and $~s, %al" (- (ash 1 fixnum-shift) 1))
+    (emit "cmp $~s, %al" #b00)
+    (zeroflag-to-bool))
+
+(define-primitive (char? arg)
+    (emit-expr arg)
+    ; apply fixnum mask (1 bits char-shift times)
+    (emit "and $~s, %al" (- (ash 1 char-shift) 1))
+    (emit "cmp $~s, %al" char-tag)
+    (zeroflag-to-bool))
+
+(define-primitive (boolean? arg)
+    (emit-expr arg)
+    ; apply fixnum mask (1 bits bool-shift times)
+    (emit "and $~s, %al" (- (ash 1 bool-shift) 1))
+    (emit "cmp $~s, %al" bool-tag)
+    (zeroflag-to-bool))

@@ -18,8 +18,9 @@
         ((immediate? expr) (emit-immediate expr))
         ((variable? expr) (emit-variable-ref env expr))
         ((let? expr) (emit-let si env expr))
+        ((if? expr) (emit-if si env expr))
         ((primcall? expr) (emit-primcall si env expr))
-        (else (error "syntax error"))))
+        (else (error "syntax error: " expr))))
 
 ; immediate constants
 (define (immediate? x)
@@ -273,3 +274,35 @@
 
 (define (emit-let si env expr)
     (process-let si env (let-bindings expr) (let-body expr)))
+
+; conditional expressions
+(define label-count 0)
+
+(define (unique-label)
+    (let ((L (format #f "L_~a" label-count)))
+        (set! label-count (+ label-count 1))
+        L))
+
+(define (if? expr)
+    (and (pair? expr) (eq? (car expr) 'if)))
+
+(define (emit-if si env expr)
+    (let ((altern-label (unique-label))
+          (end-label (unique-label))
+          (test (cadr expr))
+          (conseq (caddr expr))
+          (altern (cadddr expr)))
+        (emit-expr si env test)
+        (emit "cmpl $~a, %eax" (immediate-rep #f))
+        ; jump to alternative label if test is 
+        ; equal to false
+        (emit "je ~a" altern-label)
+        (emit-expr si env conseq)
+        ; jump unconditionally to end so that altern 
+        ; is not executed if test is truthy
+        (emit "jmp ~a" end-label)
+        ; emit label for altern
+        (emit "~a:" altern-label)
+        (emit-expr si env altern)
+        ; emit label for end
+        (emit "~a:" end-label)))

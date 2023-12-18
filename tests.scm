@@ -305,3 +305,23 @@
          (let ((x (+ x x)))
            (+ x x)))))
    "192\n")
+
+; if
+(run-test '(if #t 12 13) "12\n")
+(run-test '(if #f 12 13) "13\n")
+(run-test '(if 0 12 13)  "12\n")
+(run-test '(if () 43 ()) "43\n")
+(run-test '(if #t (if 12 13 4) 17) "13\n")
+(run-test '(if #f 12 (if #f 13 4)) "4\n")
+(run-test '(if #\X (if 1 2 3) (if 4 5 6)) "2\n")
+(run-test '(if (not (boolean? #t)) 15 (boolean? #f)) "#t\n")
+(run-test '(if (if (char? #\a)
+                  (boolean? #\b) (integer? #\c)) 119 -23) "-23\n")
+(run-test '(if (if (if (not 1) (not 2) (not 3)) 4 5) 6 7) "6\n") 
+(run-test '(if (not (if 
+                (if (not 1) (not 2) (not 3)) 4 5)) 6 7) "7\n") 
+(run-test '(not (if (not (if 
+                (if (not 1) (not 2) (not 3)) 4 5)) 6 7)) "#f\n") 
+(run-test '(if (char? 12) 13 14) "14\n")
+(run-test '(if (char? #\a) 13 14) "13\n")
+(run-test '(add1 (if (sub1 1) (sub1 13) 14)) "13\n")

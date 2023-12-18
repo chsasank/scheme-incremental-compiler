@@ -16,6 +16,8 @@
 (define (emit-expr si env expr)
     (cond
         ((immediate? expr) (emit-immediate expr))
+        ((variable? expr) (emit-variable-ref env expr))
+        ((let? expr) (emit-let si env expr))
         ((primcall? expr) (emit-primcall si env expr))
         (else (error "syntax error"))))
 
@@ -89,7 +91,7 @@
     (emit-expr si env arg)
     (emit "shrl $~a, %eax" (- char-shift fixnum-shift)))
 
-(define (zeroflag-to-bool)
+(define (emit-zeroflag-to-bool)
     ; convert zeroflag set by cmp to boolean
     ; used in other primitives
     ; make eax 0
@@ -104,13 +106,13 @@
     (emit-expr si env arg)
     ; compare 0 to result and set zero flag if true
     (emit "cmpl $0, %eax")
-    (zeroflag-to-bool))
+    (emit-zeroflag-to-bool))
 
 (define-primitive (null? si env arg)
     (emit-expr si env arg)
     ; compare null value bits to result and set zero flag if true
     (emit "cmpl $~a, %eax" null-val)
-    (zeroflag-to-bool))
+    (emit-zeroflag-to-bool))
 
 (define-primitive (not si env arg)
     ; return true only if arg is #f
@@ -118,39 +120,46 @@
     ; compare immediate rep of #f to result
     ; set zero flag if true
     (emit "cmpl $~a, %eax" (immediate-rep #f))
-    (zeroflag-to-bool))
+    (emit-zeroflag-to-bool))
 
 (define-primitive (integer? si env arg)
     (emit-expr si env arg)
     ; apply fixnum mask (1 bits fixnum-shift times)
     (emit "and $~s, %al" (- (ash 1 fixnum-shift) 1))
     (emit "cmp $~s, %al" #b00)
-    (zeroflag-to-bool))
+    (emit-zeroflag-to-bool))
 
 (define-primitive (char? si env arg)
     (emit-expr si env arg)
     ; apply fixnum mask (1 bits char-shift times)
     (emit "and $~s, %al" (- (ash 1 char-shift) 1))
     (emit "cmp $~s, %al" char-tag)
-    (zeroflag-to-bool))
+    (emit-zeroflag-to-bool))
 
 (define-primitive (boolean? si env arg)
     (emit-expr si env arg)
     ; apply fixnum mask (1 bits bool-shift times)
     (emit "and $~s, %al" (- (ash 1 bool-shift) 1))
     (emit "cmp $~s, %al" bool-tag)
-    (zeroflag-to-bool))
+    (emit-zeroflag-to-bool))
 
 ; binary primitives
+(define (next-stack-index si)
+    (- si word-size))
+
+(define (emit-stack-save si)
+    ; save output of previous instructions to stack
+    (emit "movl %eax, ~a(%rsp)" si))
+
 (define-primitive (+ si env arg1 arg2)
     (emit-expr si env arg1)
     
     ; save result of arg1 in stack
-    (emit "movl %eax, ~a(%rsp)" si)
+    (emit-stack-save si)
 
     ; move stack index by a word so that 
     ; above is not overwritten
-    (emit-expr (- si word-size) env arg2)
+    (emit-expr (next-stack-index si) env arg2)
 
     ; add result from stack with arg2 result
     ; this works because of integer tag = b00
@@ -158,29 +167,29 @@
 
 (define-primitive (- si env arg1 arg2)
     (emit-expr si env arg2)
-    (emit "movl %eax, ~a(%rsp)" si)
-    (emit-expr (- si word-size) env arg1)
+    (emit-stack-save si)
+    (emit-expr (next-stack-index si) env arg1)
     (emit "subl ~a(%rsp), %eax" si))
 
 (define-primitive (* si env arg1 arg2)
     (emit-expr si env arg1)
-    (emit "movl %eax, ~a(%rsp)" si)
-    (emit-expr (- si word-size) env arg2)
+    (emit-stack-save si)
+    (emit-expr (next-stack-index si) env arg2)
     ; remove b00 from int for one of the args
     (emit "shrl $~a, %eax" fixnum-shift)
     (emit "imull ~a(%rsp), %eax" si))
 
 (define-primitive (= si env arg1 arg2)
     (emit-expr si env arg1)
-    (emit "movl %eax, ~a(%rsp)" si)
-    (emit-expr (- si word-size) env arg2)
+    (emit-stack-save si)
+    (emit-expr (next-stack-index si) env arg2)
     (emit "cmpl ~a(%rsp), %eax" si)
-    (zeroflag-to-bool))
+    (emit-zeroflag-to-bool))
 
 (define-primitive (< si env arg1 arg2)
     (emit-expr si env arg1)
-    (emit "movl %eax, ~a(%rsp)" si)
-    (emit-expr (- si word-size) env arg2)
+    (emit-stack-save si)
+    (emit-expr (next-stack-index si) env arg2)
     (emit "cmpl %eax, ~a(%rsp)" si)
     
     (emit "movl $0, %eax")
@@ -192,8 +201,8 @@
 
 (define-primitive (<= si env arg1 arg2)
     (emit-expr si env arg1)
-    (emit "movl %eax, ~a(%rsp)" si)
-    (emit-expr (- si word-size) env arg2)
+    (emit-stack-save si)
+    (emit-expr (next-stack-index si) env arg2)
     (emit "cmpl %eax, ~a(%rsp)" si)
     
     (emit "movl $0, %eax")
@@ -203,8 +212,8 @@
 
 (define-primitive (> si env arg1 arg2)
     (emit-expr si env arg1)
-    (emit "movl %eax, ~a(%rsp)" si)
-    (emit-expr (- si word-size) env arg2)
+    (emit-stack-save si)
+    (emit-expr (next-stack-index si) env arg2)
     (emit "cmpl %eax, ~a(%rsp)" si)
     
     (emit "movl $0, %eax")
@@ -214,8 +223,8 @@
 
 (define-primitive (>= si env arg1 arg2)
     (emit-expr si env arg1)
-    (emit "movl %eax, ~a(%rsp)" si)
-    (emit-expr (- si word-size) env arg2)
+    (emit-stack-save si)
+    (emit-expr (next-stack-index si) env arg2)
     (emit "cmpl %eax, ~a(%rsp)" si)
     
     (emit "movl $0, %eax")
@@ -228,3 +237,39 @@
     ; variable is any symbol that's not a primitive
     (and (symbol? x) (not (primitive? x))))
 
+(define (emit-variable-ref env var)
+    (cond
+        ((assoc var env)
+            (emit "movl ~a(%rsp), %eax" (cdr (assoc var env))))
+        (else (error "unknown variable: " var))))
+
+(define (let? expr)
+    (and (pair? expr) (eq? (car expr) 'let)))
+
+(define (let-bindings expr)
+    ; get bindings list from expr
+    (car (cdr expr)))
+
+(define (let-body expr)
+    ; get bindings list from expr
+    (car (cdr (cdr expr))))
+
+(define (process-let si env bindings body)
+    ; recursively add bindings to env
+    (cond
+        ((null? bindings)
+            (emit-expr si env body))
+        (else
+            (let* ((b (car bindings))
+                    (lhs (car b))
+                    (rhs (car (cdr b))))
+                ; emit code for rhs of binding b
+                (emit-expr si env rhs)
+                ; save output into stack
+                (emit-stack-save si)
+                (process-let
+                    (next-stack-index si) (acons lhs si env)
+                    (cdr bindings) body)))))
+
+(define (emit-let si env expr)
+    (process-let si env (let-bindings expr) (let-body expr)))

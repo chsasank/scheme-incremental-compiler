@@ -219,6 +219,7 @@
 (run-test '(* (* (* (* (* 2 3) 4) 5) 6) 7) "5040\n")
 (run-test '(* 2 (* 3 (* 4 (* 5 (* 6 7))))) "5040\n")
 
+; =
 (run-test '(= 12 13) "#f\n")
 (run-test '(= 12 12) "#t\n")
 (run-test '(= 16 (+ 13 3)) "#t\n")
@@ -226,6 +227,7 @@
 (run-test '(= (+ 13 3) 16) "#t\n")
 (run-test '(= (+ 13 13) 16) "#f\n")
 
+; <
 (run-test '(< 12 13) "#t\n")
 (run-test '(< 12 12) "#f\n")
 (run-test '(< 13 12) "#f\n")
@@ -236,7 +238,7 @@
 (run-test '(< (+ 13 3) 16) "#f\n")
 (run-test '(< (+ 13 13) 16) "#f\n")
 
-
+; <=
 (run-test '(<= 12 13)  "#t\n")
 (run-test '(<= 12 12)  "#t\n")
 (run-test '(<= 13 12)  "#f\n")
@@ -247,7 +249,7 @@
 (run-test '(<= (+ 13 3) 16)  "#t\n")
 (run-test '(<= (+ 13 13) 16)  "#f\n")
 
-
+; >
 (run-test '(> 12 13) "#f\n")
 (run-test '(> 12 12) "#f\n")
 (run-test '(> 13 12) "#t\n")
@@ -258,7 +260,7 @@
 (run-test '(> (+ 13 3) 16) "#f\n")
 (run-test '(> (+ 13 13) 16) "#t\n")
 
-
+; >=
 (run-test '(>= 12 13) "#f\n")
 (run-test '(>= 12 12) "#t\n")
 (run-test '(>= 13 12) "#t\n")
@@ -268,3 +270,38 @@
 (run-test '(>= (+ 13 1) 16) "#f\n")
 (run-test '(>= (+ 13 3) 16) "#t\n")
 (run-test '(>= (+ 13 13) 16) "#t\n")
+
+; let
+(run-test '(let ((x 5)) x) "5\n")
+(run-test '(let ((x (+ 1 2))) x) "3\n")
+(run-test '(let ((x (+ 1 2))) 
+     (let ((y (+ 3 4)))
+       (+ x y))) 
+   "10\n")
+(run-test '(let ((x (+ 1 2))) 
+     (let ((y (+ 3 4)))
+       (- y x)))
+   "4\n")
+(run-test '(let ((x (+ 1 2))
+         (y (+ 3 4)))
+     (- y x))
+   "4\n")
+(run-test '(let ((x (let ((y (+ 1 2))) (* y y))))
+     (+ x x))
+   "18\n")
+(run-test '(let ((x (+ 1 2)))
+     (let ((x (+ 3 4)))
+       x)) 
+   "7\n")
+(run-test '(let ((x (+ 1 2)))
+     (let ((x (+ x 4)))
+       x)) 
+   "7\n")
+(run-test '(let ((t (let ((t (let ((t (let ((t (+ 1 2))) t))) t))) t))) t)
+   "3\n")
+(run-test '(let ((x 12))
+     (let ((x (+ x x)))
+       (let ((x (+ x x)))
+         (let ((x (+ x x)))
+           (+ x x)))))
+   "192\n")

@@ -4,6 +4,8 @@
 (define bool-shift 7)
 (define bool-tag #b0011111)
 (define null-val #b00101111)
+(define heap-shift 3)
+(define pair-tag #b001)
 (define word-size 8)
 
 ; cases for compiler
@@ -42,6 +44,7 @@
         ; empty list
         ((null? x) null-val)
         (else (error "no immediate representation for" x))))
+
 (define (emit-immediate expr)
     (emit "movl $~a, %eax" (immediate-rep expr)))
 
@@ -150,7 +153,7 @@
 
 (define (emit-stack-save si)
     ; save output of previous instructions to stack
-    (emit "movl %eax, ~a(%rsp)" si))
+    (emit "mov %rax, ~a(%rsp)" si))
 
 (define-primitive (+ si env arg1 arg2)
     (emit-expr si env arg1)
@@ -306,3 +309,45 @@
         (emit-expr si env altern)
         ; emit label for end
         (emit "~a:" end-label)))
+
+; lists
+
+(define-primitive (pair? si env expr)
+    (emit-expr si env expr)
+    ; apply heap mask (1 bits heap-shift times)
+    ; to lower byte of %eax
+    (emit "and $~s, %al" (- (ash 1 heap-shift) 1))
+    (emit "cmp $~s, %al" pair-tag)
+    (emit-zeroflag-to-bool))
+
+(define-primitive (cons si env arg1 arg2)
+    ; compute car
+    (emit-expr si env arg1)
+    ; store it in stack
+    (emit-stack-save si)
+    ; compute cdr
+    ; increment stack index so that car is not overwritten
+    (emit-expr (next-stack-index si) env arg2)
+
+    ; save cdr in next heap word
+    (emit "mov %rax, ~a(%rsi)" word-size)
+
+    ; save car to start of heap by saving previous result to scratch 
+    ; first because we can't move address to address direclty.
+    (emit "mov ~a(%rsp), %rax" si)
+    (emit "mov %rax, 0(%rsi)")
+
+    ; move address to result
+    (emit "mov %rsi, %rax")
+    ; add pair tag
+    (emit "or $~a, %rax" pair-tag)
+    ; increment heap pointer
+    (emit "add $~a, %rsi" (* 2 word-size)))
+
+(define-primitive (car si env arg1)
+    (emit-expr si env arg1)
+    (emit "mov ~a(%rax), %rax" (- pair-tag)))
+
+(define-primitive (cdr si env arg1)
+    (emit-expr si env arg1)
+    (emit "mov ~a(%rax), %rax" (- word-size pair-tag)))

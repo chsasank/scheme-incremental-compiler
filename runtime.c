@@ -30,6 +30,9 @@ static void print_val(int val){
     else if (val == null_val){
         printf("()\n");
     }
+    else{
+        printf("pointer: 0x%x\n", val);
+    }
 }
 
 /*Allocate protected stack space and return pointer to
@@ -86,8 +89,14 @@ int main(int argc, char** argv){
     int stack_size = (16 * 4096);   /* holds 16k cells*/
     char *stack_top = allocate_protected_space(stack_size);
     char *stack_base = stack_top + stack_size;
-    int val = scheme_entry(stack_base);
+
+    int heap_size = (160 * 4096);  /* holds 160k cells */
+    char *heap_top = allocate_protected_space(heap_size);
+    
+    int val = scheme_entry(stack_base, heap_top);
     print_val(val);
+
     deallocate_protected_space(stack_top, stack_size);
+    deallocate_protected_space(heap_top, heap_size);
     return 0;
 }

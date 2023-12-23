@@ -21,8 +21,7 @@
         "mov %rdi, %rsp\n"
         "call L_scheme_entry\n"
         "mov %rcx, %rsp\n"
-        "ret\n"
-        "L_scheme_entry:\n")
+        "ret\n")
         output-file)
 
     (compile-program x)

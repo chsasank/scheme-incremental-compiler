@@ -8,12 +8,18 @@
 (define pair-tag #b001)
 (define word-size 8)
 
-; cases for compiler
+(define (emit-scheme-entry)
+    (emit "L_scheme_entry:"))
+
 (define (compile-program x)
     ; initialize stack index - word-size so as not to 
     ; overwrite return address
-    (emit-expr (- word-size) '() x)
-    (emit "ret"))
+    (if (letrec? x)
+        (emit-letrec x)
+        (begin
+            (emit-scheme-entry)
+            (emit-expr (- word-size) '() x)
+            (emit "ret"))))
 
 (define (emit-expr si env expr)
     (cond
@@ -22,6 +28,7 @@
         ((let? expr) (emit-let si env expr))
         ((if? expr) (emit-if si env expr))
         ((primcall? expr) (emit-primcall si env expr))
+        ((app? expr) (emit-app si env expr))
         (else (error "syntax error: " expr))))
 
 ; immediate constants
@@ -255,8 +262,11 @@
     (car (cdr expr)))
 
 (define (let-body expr)
-    ; get bindings list from expr
     (car (cdr (cdr expr))))
+
+(define (extend-env var si env)
+    ; add var-si key value pair to env
+    (acons var si env))
 
 (define (process-let si env bindings body)
     ; recursively add bindings to env
@@ -272,7 +282,7 @@
                 ; save output into stack
                 (emit-stack-save si)
                 (process-let
-                    (next-stack-index si) (acons lhs si env)
+                    (next-stack-index si) (extend-env lhs si env)
                     (cdr bindings) body)))))
 
 (define (emit-let si env expr)
@@ -311,7 +321,6 @@
         (emit "~a:" end-label)))
 
 ; lists
-
 (define-primitive (pair? si env expr)
     (emit-expr si env expr)
     ; apply heap mask (1 bits heap-shift times)
@@ -332,8 +341,9 @@
     ; save cdr in next heap word
     (emit "mov %rax, ~a(%rsi)" word-size)
 
-    ; save car to start of heap by saving previous result to scratch 
-    ; first because we can't move address to address direclty.
+    ; save car to start of heap by saving previous 
+    ; result to scratch first because we can't move
+    ; address to address direclty.
     (emit "mov ~a(%rsp), %rax" si)
     (emit "mov %rax, 0(%rsi)")
 
@@ -351,3 +361,92 @@
 (define-primitive (cdr si env arg1)
     (emit-expr si env arg1)
     (emit "mov ~a(%rax), %rax" (- word-size pair-tag)))
+
+; procedures
+; letrec
+(define (letrec? expr)
+    (and (pair? expr) (eq? (car expr) 'letrec)))
+
+(define (letrec-bindings expr)
+    (cadr expr))
+
+(define (letrec-body expr)
+    (caddr expr))
+
+(define (binding-lhs b)
+    (car b))
+
+(define (binding-rhs b)
+    (cadr b))
+
+(define (make-letrec-env lvars labels)
+    ; string values in env is seen as labels
+    (map cons lvars labels))
+
+(define (emit-letrec expr)
+    (let* ((bindings (letrec-bindings expr))
+           (lvars (map binding-lhs bindings))
+           (lambdas (map binding-rhs bindings))
+           (labels (map (lambda (x) (unique-label)) lvars))
+           (env (make-letrec-env lvars labels)))
+        (for-each
+            (lambda (label expr) (emit-lambda env label expr))
+            labels lambdas)
+        (emit-scheme-entry)
+        (emit-expr (- word-size) env (letrec-body expr))
+        (emit "ret")))
+
+; lambda
+(define (lambda-fmls expr)
+    (cadr expr))
+
+(define (lambda-body expr)
+    (caddr expr))
+
+(define (process-lambda si env fmls body)
+    ; recursively process formals
+    (cond
+        ((null? fmls)
+            (emit-expr si env body))
+        (else
+            (process-lambda
+                (next-stack-index si)
+                (extend-env (car fmls) si env)
+                (cdr fmls)
+                body))))
+
+(define (emit-lambda env label expr)
+    (emit "~a:" label)
+    (process-lambda (- word-size) env
+        (lambda-fmls expr) (lambda-body expr))
+    (emit "ret"))
+
+; application
+(define (app? expr)
+    (and (pair? expr) (eq? (car expr) 'app)))
+
+(define (app-args expr)
+    (cddr expr))
+
+(define (app-target expr)
+    (cadr expr))
+
+(define (emit-arguments si env args)
+    ; fill stack with arg values
+    (unless (null? args)
+        (emit-expr si env (car args))
+        (emit-stack-save si)
+        (emit-arguments (- si word-size) env (cdr args))))
+
+(define (emit-adjust-base diff)
+    (emit "add $~a, %rsp" diff))
+
+(define (emit-app si env expr)
+    ; leave base of call stack for saving return address
+    (emit-arguments (- si word-size) env (app-args expr))
+    ; change stack pointer to pass arguments
+    (emit-adjust-base (+ si word-size))
+    ; call label for the lambda
+    (emit "call ~a" (cdr (assoc (app-target expr) env)))
+    ; reset stack after call to where it was before
+    (emit-adjust-base (- (+ si word-size))))

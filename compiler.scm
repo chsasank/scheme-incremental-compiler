@@ -12,12 +12,12 @@
     (emit "L_scheme_entry:"))
 
 (define (compile-program x)
-    ; initialize stack index - word-size so as not to 
-    ; overwrite return address
     (if (letrec? x)
         (emit-letrec x)
         (begin
             (emit-scheme-entry)
+            ; initialize stack index (- word-size) so as
+            ; not to overwrite return address
             (emit-expr (- word-size) '() x)
             (emit "ret"))))
 
@@ -250,7 +250,7 @@
 
 (define (emit-variable-ref env var)
     (cond
-        ((assoc var env)
+        ((and (assoc var env) (integer? (cdr (assoc var env))))
             (emit "movl ~a(%rsp), %eax" (cdr (assoc var env))))
         (else (error "unknown variable: " var))))
 
@@ -411,6 +411,7 @@
         (else
             (process-lambda
                 (next-stack-index si)
+                ; we expect formal values to be in stack
                 (extend-env (car fmls) si env)
                 (cdr fmls)
                 body))))
@@ -441,12 +442,18 @@
 (define (emit-adjust-base diff)
     (emit "add $~a, %rsp" diff))
 
+(define (app-label lvar env)
+    (cond
+        ((and (assoc lvar env) (string? (cdr (assoc lvar env))))
+            (cdr (assoc lvar env)))
+        (else (error "unknown procedure: " lvar))))
+
 (define (emit-app si env expr)
     ; leave base of call stack for saving return address
     (emit-arguments (- si word-size) env (app-args expr))
     ; change stack pointer to pass arguments
     (emit-adjust-base (+ si word-size))
     ; call label for the lambda
-    (emit "call ~a" (cdr (assoc (app-target expr) env)))
+    (emit "call ~a" (app-label (app-target expr) env))
     ; reset stack after call to where it was before
     (emit-adjust-base (- (+ si word-size))))
